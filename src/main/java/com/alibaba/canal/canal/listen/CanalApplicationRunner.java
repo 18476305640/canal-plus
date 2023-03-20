@@ -43,6 +43,13 @@ public class CanalApplicationRunner implements ApplicationRunner {
     private ApplicationContext applicationContext;
 
     private String basePackage;
+
+    /**
+     * 异步执行运行Canal主方法
+     *
+     * @param args arg游戏
+     * @throws Exception 异常
+     */
     @Override
     public void run(ApplicationArguments args) throws Exception {
         // 初始化包
@@ -60,6 +67,11 @@ public class CanalApplicationRunner implements ApplicationRunner {
 
     }
 
+    /**
+     * 获得springboot主启动类所在包
+     *
+     * @return {@link String}
+     */
     private String getBasePackage() {
         // 获取主启动类所在包名
         String mainClassName = null;
@@ -81,6 +93,12 @@ public class CanalApplicationRunner implements ApplicationRunner {
         return basePackage;
     }
 
+    /**
+     * 获取所有加了@CanalListen("canal_test.t_user") 注解的全类名并映射为 Map （全类名，bean实例）
+     * 注意加入@CanalListen("canal_test.t_user") 注解的也相当加了@Component,所以可以从容器中获取对应实例
+     *
+     * @throws ClassNotFoundException 类没有发现异常
+     */
     public void canalMain() throws ClassNotFoundException {
         // 获取所有加了@CanalListen("canal_test.t_user") 注解的方法
         Set<String> listeners = scanCanalListeners(CanalListen.class);
@@ -98,14 +116,16 @@ public class CanalApplicationRunner implements ApplicationRunner {
             }
 
         });
+        // 得到的 Map （全类名，bean实例） 给一个方法去订阅
         sub(listenerMap);
     }
 
 
-
-
-
-    // 订阅
+    /**
+     * 订阅，这是Canal的核心逻辑，有消息后映射后之前加了@CanalListen注解的类方法上(handle)
+     *
+     * @param listenerMap 侦听器地图
+     */
     private void sub(Map<String, CanalListener> listenerMap) {
         // db1.table,db2.table
         String subStr = String.join(",", listenerMap.keySet());
@@ -114,8 +134,6 @@ public class CanalApplicationRunner implements ApplicationRunner {
                 USERNAME,
                 PASSWORD);
         int batchSize = 1000;
-        //空闲空转计数器
-        int emptyCount = 0;
         System.out.println("------ Canal init Success !，开始监听MySQL变化 ------");
         try {
             connector.connect();
@@ -128,11 +146,8 @@ public class CanalApplicationRunner implements ApplicationRunner {
                 long batchId = message.getId();
                 int size = message.getEntries().size();
                 if (batchId == -1 || size == 0) {
-                    emptyCount++;
                     try { Thread.sleep(INTERVAL_TIME); } catch (InterruptedException e) { e.printStackTrace(); }
                 } else {
-                    //计数器重新置零
-                    emptyCount = 0;
                     // 动作处理
                     MotionPerception.handle(message.getEntries(),listenerMap);
                 }
